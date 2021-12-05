@@ -12,6 +12,12 @@ struct Issue {
     milestone: Milestone
 }
 
+impl Issue {
+    fn estimate_label(&self) -> &Label {
+        self.labels.iter().find(|label| label.color == Config::new().github_estimate_color_code).unwrap()
+    }
+}
+
 #[derive(Deserialize, Debug)]
 struct Label {
     name: String,
@@ -26,15 +32,21 @@ struct Milestone {
 struct Config {
     github_owner: String,
     github_repo: String,
-    github_estimate_color_code: String
+    github_estimate_color_code: String,
+    github_token: String
 }
 
 impl Config {
     pub fn new() -> Self {
+        let token = match env::var("GITHUB_ESTIMATE_COLOR_CODE") {
+            Ok(token) => token,
+            _ => String::from("hoge")
+        };
         Self {
             github_owner: env::var("GITHUB_OWNER").unwrap(),
             github_repo: env::var("GITHUB_REPO").unwrap(),
-            github_estimate_color_code: env::var("GITHUB_ESTIMATE_COLOR_CODE").unwrap()
+            github_estimate_color_code: env::var("GITHUB_ESTIMATE_COLOR_CODE").unwrap(),
+            github_token: token
         }
     }
 }
@@ -63,13 +75,13 @@ async fn main() -> Result<(), Error> {
                 println!("milestone title: {}", issues[0].milestone.title);
                 println!("number,title,estimate,state");
                 for issue in issues {
-                  let estimate_label = issue.labels.iter().find(|label| label.color == Config::new().github_estimate_color_code).unwrap();
+                  let estimate_label = issue.estimate_label();
                   println!("{},{},{},{}", issue.number, issue.title, estimate_label.name, issue.state)
                 };
             }
             if action == "vel" {
-                let velocity = fetch_velocity(String::from(milestone_number));
-                println!("velocity resurt: {}", velocity)
+                let velocity = fetch_velocity(String::from(milestone_number)).await?;
+                println!("velocity: {}", velocity);
             }
         }
     }
@@ -84,6 +96,8 @@ async fn fetch_issues(milestone_number: String) -> Result<Vec<Issue>, Error> {
     let client = reqwest::Client::new();
     let response = client.get(&request_url)
         .header("User-Agent", "request")
+        // privateリポジトリを指定する場合
+        // .header("Authorization", format!("token {}", Config::new().github_token))
         .query(&[("state", "all"), ("milestone", &milestone_number)])
         .send()
         .await?;
@@ -91,6 +105,12 @@ async fn fetch_issues(milestone_number: String) -> Result<Vec<Issue>, Error> {
     Ok(issues)
 }
 
-fn fetch_velocity(velocity: String) -> String {
-    String::from(velocity)
+async fn fetch_velocity(milestone_number: String) -> Result<String, Error> {
+    let issues = fetch_issues(String::from(milestone_number)).await?;
+    let mut total = 0;
+    for issue in issues {
+        let estimate_point: i32 = issue.estimate_label().name.parse().unwrap();
+        total += estimate_point;
+    }
+    Ok(total.to_string())
 }
