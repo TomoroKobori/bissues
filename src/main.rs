@@ -46,7 +46,7 @@ async fn main() -> Result<(), Error> {
                 println!("milestone title: {}", issues[0].milestone.title);
                 println!("number,title,estimate,state");
                 for issue in issues {
-                  let estimate_label = issue.labels.iter().find(|label| label.color == "C5DEF5").unwrap();
+                  let estimate_label = issue.labels.iter().find(|label| label.color == "C2E0C6").unwrap();
                   println!("{},{},{},{}", issue.number, issue.title, estimate_label.name, issue.state)
                 };
             }
